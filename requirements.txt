@@ -1,0 +1,9 @@
+flask
+pyautogui
+keyboard
+pycaw
+comtypes
+pywin32
+qrcode
+pillow
+qrcode_terminal

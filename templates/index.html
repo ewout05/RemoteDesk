@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>Remote Control</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      margin: 0;
+      background: #1e1e1e;
+      color: white;
+      font-family: 'Segoe UI', sans-serif;
+      text-align: center;
+    }
+    h2 {
+      margin-top: 30px;
+      font-size: 1.5em;
+    }
+    #touchpad {
+      width: 100vw;
+      height: 40vh;
+      background: #333;
+      touch-action: none;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin: 15px 0;
+    }
+    button, input {
+      font-size: 18px;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      background: #444;
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #666;
+    }
+    input {
+      width: 90%;
+      background: #222;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>🖱️ Touchpad</h2>
+  <div id="touchpad"></div>
+
+  <h2>🖱️ Click</h2>
+  <div class="controls">
+    <button onclick="sendClick('left')">🖐️ Left click</button>
+    <button onclick="sendClick('right')">📋 Right click</button>
+  </div>
+
+  <h2>⌨️ Keyboard</h2>
+  <input type="text" id="keyboard" placeholder="Type here..." autocomplete="off">
+  <div class="controls">
+    <button onclick="sendSpecial('enter')">↩️ Enter</button>
+    <button onclick="sendSpecial('backspace')">⌫ Backspace</button>
+    <button onclick="sendSpecial('tab')">⇥ Tab</button>
+    <button onclick="sendSpecial('space')">␣ Space</button>
+  </div>
+
+  <h2>🧭 Arrows</h2>
+  <div class="controls" style="flex-direction: column; align-items: center;">
+    <button onclick="sendSpecial('up')">⬆️</button>
+    <div style="display: flex; gap: 10px;">
+      <button onclick="sendSpecial('left')">⬅️</button>
+      <button onclick="sendSpecial('down')">⬇️</button>
+      <button onclick="sendSpecial('right')">➡️</button>
+    </div>
+  </div>
+
+  <h2>📄 Navigation keys</h2>
+  <div class="controls">
+    <button onclick="sendSpecial('home')">🏠 Home</button>
+    <button onclick="sendSpecial('end')">🔚 End</button>
+    <button onclick="sendSpecial('pageup')">⬆️ Page Up</button>
+    <button onclick="sendSpecial('pagedown')">⬇️ Page Down</button>
+    <button onclick="sendSpecial('esc')">⛔ Esc</button>
+  </div>
+
+  <h2>🔊 Media</h2>
+  <div class="controls">
+    <button onclick="media('volume_up')">🔊 Volume +</button>
+    <button onclick="media('volume_down')">🔉 Volume -</button>
+    <button onclick="media('mute')">🔇 Mute</button>
+    <button onclick="media('play_pause')">⏯️ Play/Pause</button>
+    <button onclick="media('fullscreen_browser')">🖥️ Browser fullscreen</button>
+    <button onclick="media('fullscreen_video')">▶️ Video fullscreen</button>
+  </div>
+
+  <h2>🛠️ Custom</h2>
+  <div class="controls">
+    <button onclick="custom('x')">x</button>
+  </div>
+
+<script>
+  const server = window.location.origin;
+  let lastX = null, lastY = null;
+  let movementAllowed = false;
+  let controller = null;
+
+  const pad = document.getElementById("touchpad");
+
+  pad.addEventListener("pointerdown", e => {
+    movementAllowed = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    controller = new AbortController();
+    fetch(`${server}/touch_start`, { method: "POST" });
+  });
+
+  pad.addEventListener("pointermove", e => {
+    if (!movementAllowed) return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+
+    if (controller) controller.abort();
+    controller = new AbortController();
+
+    fetch(`${server}/move_relative`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `dx=${dx}&dy=${dy}`,
+      signal: controller.signal
+    }).catch(() => {});
+  });
+
+  pad.addEventListener("pointerup", stopPointer);
+  pad.addEventListener("pointercancel", stopPointer);
+  pad.addEventListener("pointerleave", stopPointer);
+
+  function stopPointer() {
+    if (!movementAllowed) return;
+    movementAllowed = false;
+    lastX = null;
+    lastY = null;
+    if (controller) controller.abort();
+    fetch(`${server}/touch_end`, { method: "POST" });
+  }
+
+  function sendClick(button, double = false) {
+    const body = `button=${button}${double ? '&double=true' : ''}`;
+    fetch(`${server}/click`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body
+    });
+  }
+
+  function sendSpecial(key) {
+    fetch(`${server}/key`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `key=${key}`
+    });
+  }
+
+  function media(action) {
+    fetch(`${server}/media`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `action=${action}`
+    });
+  }
+
+  function custom(btn) {
+    fetch(`${server}/custom`, {
+      method: "POST",
+      headers: {"Content-Type": "application/x-www-form-urlencoded"},
+      body: `custom=${btn}`
+    });
+  }
+
+  const input = document.getElementById("keyboard");
+  input.addEventListener("input", () => {
+    const value = input.value;
+    if (value.length === 0) return;
+    const lastChar = value.slice(-1);
+    fetch(`${server}/key`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `key=${encodeURIComponent(lastChar)}`
+    });
+    input.value = "";
+  });
+
+  input.addEventListener("keydown", e => {
+    const arrowKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+    const navKeys = ["Home", "End", "PageUp", "PageDown", "Escape"];
+    if (arrowKeys.includes(e.key)) {
+      fetch(`${server}/key`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `key=${e.key.replace("Arrow", "").toLowerCase()}`
+      });
+      e.preventDefault();
+    }
+
+    if (navKeys.includes(e.key)) {
+      fetch(`${server}/key`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `key=${e.key.toLowerCase()}`
+      });
+      e.preventDefault();
+    }
+
+    if (["Backspace", "Enter", "Tab", " "].includes(e.key)) {
+      fetch(`${server}/key`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `key=${e.key === " " ? "space" : e.key.toLowerCase()}`
+      });
+      e.preventDefault();
+    }
+  });
+</script>
+</body>
